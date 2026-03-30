@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>m-indexflow — LlamaIndex RAG 管线可视化</title>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0:#0a0d12;--bg1:rgba(13,16,23,.88);--bg2:rgba(19,24,34,.82);--bg3:rgba(26,32,46,.85);
+  --bdr:rgba(255,255,255,.06);--bdr2:rgba(255,255,255,.12);
+  --t:#d1d5db;--td:#7b8394;--tm:#4b5263;--tb:#e5e7eb;--tw:#f3f4f6;
+  --em:#34d399;--emd:rgba(52,211,153,.13);--emg:rgba(52,211,153,.35);
+  --tl:#2dd4bf;--tld:rgba(45,212,191,.12);
+  --am:#fbbf24;--amd:rgba(251,191,36,.12);--amg:rgba(251,191,36,.3);
+  --rd:#f87171;--rdd:rgba(248,113,113,.12);
+  --vt:#818cf8;--vtd:rgba(129,140,248,.12);
+  --fm:'Fira Code',Consolas,'Courier New',monospace;
+  --fs:-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC','Microsoft YaHei','Hiragino Sans GB',system-ui,sans-serif;
+  --rad:8px;--radl:12px;--blur:18px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t);font-family:var(--fs);font-size:14px;line-height:1.6}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 12% 20%,rgba(52,211,153,.05) 0%,transparent 60%),radial-gradient(ellipse 50% 65% at 85% 75%,rgba(45,212,191,.04) 0%,transparent 55%);z-index:0}
+body::after{content:'';position:fixed;inset:0;opacity:.018;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:128px;pointer-events:none;z-index:10000}
+#app{position:relative;z-index:1;display:flex;flex-direction:column;height:100vh}
+
+/* ═══ TOPBAR ═══ */
+.top{display:flex;align-items:center;justify-content:space-between;height:54px;padding:0 22px;background:var(--bg1);backdrop-filter:blur(var(--blur));border-bottom:1px solid var(--bdr);flex-shrink:0}
+.top::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--emg),var(--tld),transparent)}
+.top-l{display:flex;align-items:center;gap:12px}
+.top-ico{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--em),var(--tl));display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 0 18px var(--emd)}
+.top-t{font-weight:700;font-size:15px;color:var(--tw)}
+.top-s{font-size:11px;color:var(--td)}
+.top-r{display:flex;gap:10px;align-items:center}
+.mbadge{font-family:var(--fm);font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;letter-spacing:.06em;margin-right:4px}
+.mbadge.demo{background:var(--amd);color:var(--am);border:1px solid rgba(251,191,36,.2)}
+.mbadge.prod{background:var(--emd);color:var(--em);border:1px solid rgba(52,211,153,.2)}
+.stpill{font-family:var(--fm);font-size:11px;font-weight:500;color:var(--td);padding:4px 12px;border-radius:18px;border:1px solid var(--bdr);background:var(--bg2);display:flex;align-items:center;gap:6px;margin-right:6px;transition:.3s}
+.stdot{width:6px;height:6px;border-radius:50%;background:var(--td);transition:.3s}
+.stpill.on{border-color:var(--emd);color:var(--em)}.stpill.on .stdot{background:var(--em);box-shadow:0 0 8px var(--emg);animation:pulse 1.5s ease-in-out infinite}
+.stpill.ok{border-color:var(--emd);color:var(--em)}.stpill.ok .stdot{background:var(--em);box-shadow:0 0 8px var(--emg)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.btn{font-family:var(--fs);font-size:13px;font-weight:600;padding:7px 18px;border-radius:18px;border:1px solid var(--bdr2);background:var(--bg3);color:var(--t);cursor:pointer;transition:.2s;letter-spacing:.01em}
+.btn:hover{border-color:rgba(255,255,255,.18);transform:translateY(-1px)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-p{background:linear-gradient(135deg,var(--em),#059669);border:none;color:#fff;box-shadow:0 2px 12px var(--emd)}.btn-p:hover{box-shadow:0 4px 22px var(--emg)}
+
+/* ═══ MAIN ═══ */
+.main{display:grid;grid-template-columns:23% 35% 42%;flex:1;overflow:hidden}
+.pnl{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--bdr)}.pnl:last-child{border-right:none}
+.pnl-h{padding:11px 18px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--bdr);background:var(--bg1);backdrop-filter:blur(var(--blur));flex-shrink:0}
+.pnl-ic{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px}
+.ic-p{background:var(--emd);color:var(--em)}.ic-c{background:var(--tld);color:var(--tl)}.ic-s{background:var(--vtd);color:var(--vt)}
+.pnl-lb{font-size:12px;font-weight:600;color:var(--td);text-transform:uppercase;letter-spacing:.1em}
+.pnl-b{flex:1;overflow-y:auto;overflow-x:hidden}
+.pnl-b::-webkit-scrollbar{width:5px}.pnl-b::-webkit-scrollbar-track{background:transparent}.pnl-b::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:5px}
+
+/* ═══ LEFT: PIPELINE FLOW ═══ */
+.pipe-wrap{display:flex;align-items:center;justify-content:center;height:100%;padding:16px 12px}
+.pipe-wrap svg{width:100%;height:100%}
+.pn rect{rx:8;transition:all .5s cubic-bezier(.4,0,.2,1)}
+.pn text{font-family:var(--fs);fill:var(--t);text-anchor:middle;dominant-baseline:central;pointer-events:none;transition:fill .3s}
+.pn .pn-main{font-size:12px;font-weight:700;letter-spacing:-.01em}
+.pn .pn-sub{font-size:9.5px;fill:var(--td);font-family:var(--fm)}
+.pn.pending rect{fill:rgba(20,24,36,.9);stroke:rgba(255,255,255,.06);stroke-width:1}
+.pn.running rect{fill:var(--amd);stroke:var(--am);stroke-width:1.5;animation:nglow 2s ease-in-out infinite}
+.pn.running .pn-main{fill:var(--tw)}
+@keyframes nglow{0%,100%{filter:drop-shadow(0 0 4px transparent)}50%{filter:drop-shadow(0 0 14px var(--amg))}}
+.pn.completed rect{fill:var(--emd);stroke:var(--em);stroke-width:1}
+.pn.completed .pn-main{fill:var(--em)}
+.pn .pn-chk{fill:var(--em);opacity:0;transition:opacity .4s;font-size:12px}
+.pn.completed .pn-chk{opacity:1}
+.pe{fill:none;stroke:rgba(255,255,255,.06);stroke-width:1.5;transition:all .5s}
+.pe.on{stroke:var(--am);stroke-width:2;stroke-dasharray:7 4;animation:eflow .8s linear infinite;filter:drop-shadow(0 0 3px var(--amg))}
+.pe.dn{stroke:var(--em);stroke-width:1.5;opacity:.4}
+@keyframes eflow{to{stroke-dashoffset:-11}}
+.pe-lb{font-family:var(--fm);font-size:9px;fill:var(--td)}
+/* special dual node */
+.pn-dual rect{rx:6}
+
+/* ═══ MIDDLE: CHAT ═══ */
+.uarea{padding:10px 18px;border-bottom:1px solid var(--bdr);background:var(--bg1);flex-shrink:0}
+.uarea-drop{display:none;border:1.5px dashed var(--bdr2);border-radius:var(--radl);padding:18px;text-align:center;cursor:pointer;transition:.3s;margin-bottom:10px}
+.uarea-drop:hover,.uarea-drop.dragover{border-color:var(--em);background:rgba(52,211,153,.03)}
+.uarea-flist{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.uarea-fi{display:flex;align-items:center;gap:7px;padding:5px 10px;background:var(--bg2);border-radius:7px;font-size:12px}
+.uarea-fi .fn{flex:1;color:var(--tb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.uarea-fi .fc{color:var(--td);font-size:11px;font-family:var(--fm)}
+.cact{display:flex;gap:8px;align-items:center}
+.msel{font-family:var(--fm);font-size:11px;padding:5px 12px;border-radius:14px;border:1px solid var(--bdr2);background:var(--bg2);color:var(--td);cursor:pointer;outline:none;transition:.3s;appearance:none;-webkit-appearance:none}
+.msel:focus{border-color:var(--tl)}.msel option{background:var(--bg0)}
+.cl{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.cl::-webkit-scrollbar{width:5px}.cl::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:5px}
+.msg{max-width:82%;padding:12px 16px;border-radius:var(--radl);font-size:14px;line-height:1.7;animation:mslide .3s cubic-bezier(.16,1,.3,1)}
+@keyframes mslide{from{opacity:0;transform:translateY(10px) scale(.97)}}
+.msg-user{align-self:flex-end;background:linear-gradient(135deg,rgba(52,211,153,.18),rgba(45,212,191,.1));border:1px solid rgba(52,211,153,.18);color:var(--tb)}
+.msg-ai{align-self:flex-start;background:var(--bg3);border:1px solid var(--bdr);color:var(--t)}
+.msg-system{align-self:center;background:var(--amd);border:1px solid rgba(251,191,36,.18);color:var(--am);font-size:12px;font-weight:500;text-align:center;padding:8px 16px;border-radius:18px}
+/* loading msg */
+.msg-loading{align-self:center;display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--bdr2);padding:10px 20px;border-radius:18px;color:var(--td);font-size:13px}
+.spinner{width:18px;height:18px;border:2px solid var(--bdr2);border-top-color:var(--em);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cf{padding:14px 18px;border-top:1px solid var(--bdr);background:var(--bg1);backdrop-filter:blur(var(--blur));flex-shrink:0}
+.ci-row{display:flex;gap:9px;align-items:center}
+.ci{flex:1;padding:10px 16px;background:var(--bg2);border:1px solid var(--bdr2);border-radius:var(--radl);color:var(--tb);font-family:var(--fs);font-size:14px;outline:none;transition:.3s}
+.ci:focus{border-color:var(--em);box-shadow:0 0 0 3px var(--emd)}.ci::placeholder{color:var(--tm)}
+.btn-send{display:flex;align-items:center;gap:6px;padding:8px 16px}
+.btn-send .spinner{width:14px;height:14px;border-width:2px;display:none}
+.btn-send.loading .spinner{display:block}
+.btn-send.loading .send-txt{display:none}
+
+/* ═══ RIGHT: STEPS ═══ */
+.sl{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.sc{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radl);overflow:hidden;transition:border-color .3s,box-shadow .3s;animation:mslide .35s cubic-bezier(.16,1,.3,1)}
+.sc.active{border-color:rgba(52,211,153,.15);box-shadow:0 0 20px rgba(52,211,153,.06)}
+.sc-hd{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;transition:background .2s}.sc-hd:hover{background:rgba(255,255,255,.02)}
+.sc-num{font-family:var(--fm);font-size:11px;font-weight:600;color:var(--tm);min-width:26px}
+.sc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;border:2px solid var(--tm);transition:.3s}
+.sc.done .sc-dot{background:var(--em);border-color:var(--em);box-shadow:0 0 6px var(--emd)}
+.sc-tl{flex:1;font-size:14px;font-weight:600;color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc.active .sc-tl{color:var(--tw)}
+.sc-time{font-family:var(--fm);font-size:10px;font-weight:500;color:var(--am);flex-shrink:0;margin-left:auto;margin-right:6px}
+.sc-tag{font-family:var(--fm);font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;letter-spacing:.02em;flex-shrink:0}
+.tag-li{background:var(--emd);color:var(--em);border:1px solid rgba(52,211,153,.2)}
+.tag-err{background:var(--rdd);color:var(--rd);border:1px solid rgba(248,113,113,.2)}
+.tag-ph{background:rgba(255,255,255,.03);color:var(--td);border:1px solid var(--bdr)}
+.sc-dt{display:none;padding:0 14px 14px;border-top:1px solid var(--bdr)}.sc.active .sc-dt{display:block}
+.sc-code{background:rgba(8,10,16,.7);border:1px solid var(--bdr);border-radius:var(--rad);margin:10px 0;overflow:hidden}
+.sc-code-hd{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:rgba(255,255,255,.015);border-bottom:1px solid var(--bdr)}
+.sc-dots{display:flex;gap:5px}.sc-dots span{width:8px;height:8px;border-radius:50%}.sc-dots span:nth-child(1){background:#ff5f57}.sc-dots span:nth-child(2){background:#ffbd2e}.sc-dots span:nth-child(3){background:#28c840}
+.sc-code-lb{font-family:var(--fm);font-size:9px;color:var(--tm);letter-spacing:.08em}
+.sc-code pre{padding:12px 14px;font-family:var(--fm);font-size:12.5px;line-height:1.8;color:var(--t);white-space:pre-wrap;word-break:break-all}
+.cln{display:block;padding:1px 4px;border-radius:3px}.cla{background:rgba(251,191,36,.1);border-left:2px solid var(--am);padding-left:8px;margin-left:-6px}
+.ck{color:#c792ea}.cs{color:#c3e88d}.cc{color:var(--tm);font-style:italic}.cf2{color:#82aaff}.cv{color:var(--tl)}
+.sc-data{margin:8px 0}
+.sc-dlb{font-family:var(--fm);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:flex;align-items:center;gap:7px}
+.sc-dlb .bar{width:3px;height:11px;border-radius:2px}.dl-i{color:var(--vt)}.dl-i .bar{background:var(--vt)}.dl-o{color:var(--em)}.dl-o .bar{background:var(--em)}
+.sc-dv{background:rgba(8,10,16,.5);border:1px solid var(--bdr);border-radius:var(--rad);padding:10px 12px;font-family:var(--fm);font-size:12px;line-height:1.6;color:var(--t);max-height:120px;overflow-y:auto;word-break:break-all}
+.sc-dv::-webkit-scrollbar{width:3px}.sc-dv::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:3px}
+/* Node 卡片列表 */
+.sc-nodes{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;padding-right:4px}
+.sc-nodes::-webkit-scrollbar{width:4px}.sc-nodes::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
+.sc-node-card{background:rgba(8,10,16,.5);border:1px solid var(--bdr);border-radius:var(--rad);padding:10px 12px;transition:border-color .2s}
+.sc-node-card:hover{border-color:var(--bdr2)}
+.sc-node-merged{border-color:rgba(52,211,153,.2);background:rgba(52,211,153,.03)}
+/* LLM Request 美化 */
+.sc-llm-req{display:flex;flex-direction:column;gap:10px}
+.sc-llm-section{background:rgba(8,10,16,.5);border:1px solid var(--bdr);border-radius:var(--rad);overflow:hidden}
+.sc-llm-label{font-family:var(--fm);font-size:11px;font-weight:600;color:var(--tb);padding:8px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--bdr)}
+.sc-llm-val{padding:10px 12px;font-size:12.5px;line-height:1.7;color:var(--t);white-space:pre-wrap;word-break:break-all}
+.sc-llm-ctx{padding:10px 12px;font-size:12px;line-height:1.7;color:var(--t);white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto;font-family:var(--fm)}
+.sc-llm-ctx::-webkit-scrollbar{width:4px}.sc-llm-ctx::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:4px}
+.sc-llm-q{color:var(--em);font-weight:600;font-size:14px}
+.sc-node-hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sc-node-rank{font-family:var(--fm);font-size:12px;font-weight:700;color:var(--em);min-width:24px}
+.sc-node-id{font-family:var(--fm);font-size:10px;color:var(--tm)}
+.sc-node-score{font-family:var(--fm);font-size:11px;color:var(--am);margin-left:auto;font-weight:500}
+.sc-node-txt{font-size:12.5px;line-height:1.65;color:var(--t);word-break:break-all;white-space:pre-wrap}
+.sc-node-meta{font-family:var(--fm);font-size:10px;color:var(--td);margin-top:6px;padding-top:6px;border-top:1px solid var(--bdr)}
+.sc-exp{padding:12px 14px 12px 34px;background:linear-gradient(135deg,rgba(52,211,153,.03),rgba(45,212,191,.02));border:1px solid rgba(52,211,153,.08);border-radius:var(--rad);font-size:13px;line-height:1.75;color:var(--t);margin:8px 0;white-space:pre-wrap;position:relative}.sc-exp::before{content:'💡';position:absolute;left:11px;top:11px;font-size:13px}
+.sc-ela{font-family:var(--fm);font-size:10px;color:var(--tm);text-align:right;margin-top:6px}
+.sctrl{display:flex;gap:7px;padding:11px 16px;border-top:1px solid var(--bdr);background:var(--bg1);backdrop-filter:blur(var(--blur));flex-shrink:0}
+.sctrl .btn{flex:1;text-align:center;font-size:12px;padding:8px 0}
+.btn-au.pl{background:linear-gradient(135deg,var(--emd),var(--tld));border-color:var(--em);color:var(--em)}
+/* step loading indicator */
+.sc-loading{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg2);border:1px solid var(--bdr2);border-radius:var(--radl);animation:mslide .3s cubic-bezier(.16,1,.3,1)}
+.sc-loading .spinner{width:16px;height:16px;border:2px solid var(--bdr2);border-top-color:var(--em);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.sc-loading-txt{font-size:13px;color:var(--td)}
+.sc-loading-phase{font-family:var(--fm);font-size:10px;font-weight:600;color:var(--em);margin-left:auto;letter-spacing:.05em}
+
+.ey{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--tm);gap:8px;padding:24px;text-align:center}
+.ey-i{font-size:32px;opacity:.2;margin-bottom:2px}.ey-m{font-size:14px;color:var(--td);font-weight:500}.ey-h{font-size:12px;color:var(--tm);line-height:1.6}
+
+/* ═══ TIMELINE ═══ */
+.tl{height:50px;background:var(--bg1);backdrop-filter:blur(var(--blur));border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 18px;overflow-x:auto;flex-shrink:0}
+.tl::-webkit-scrollbar{height:0}
+.tlt{display:flex;align-items:center;min-width:max-content;padding:0 4px}
+.tln{display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;padding:0 4px;transition:transform .2s}.tln:hover{transform:scale(1.2)}.tln:hover .tltp{opacity:1;transform:translateX(-50%) translateY(0)}
+.tld{width:9px;height:9px;border-radius:50%;border:2px solid var(--tm);background:transparent;transition:.4s cubic-bezier(.4,0,.2,1)}
+.tln.dn .tld{background:var(--em);border-color:var(--em);box-shadow:0 0 7px var(--emd)}
+.tln.cu .tld{background:var(--am);border-color:var(--am);box-shadow:0 0 9px var(--amg);animation:pulse 1.5s ease-in-out infinite}
+.tlw{width:16px;height:2px;background:var(--tm);opacity:.3;flex-shrink:0;border-radius:1px;transition:.3s}.tlw.dn{background:var(--em);opacity:.5}
+.tltp{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%) translateY(4px);background:var(--bg3);border:1px solid var(--bdr2);padding:5px 10px;border-radius:var(--rad);font-family:var(--fm);font-size:10px;color:var(--t);white-space:nowrap;opacity:0;transition:.2s;pointer-events:none;z-index:100;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.tlsp{font-family:var(--fm);font-size:9px;color:var(--tm);padding:0 9px;letter-spacing:.08em;opacity:.5;flex-shrink:0;font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+<header class="top">
+  <div class="top-l">
+    <div class="top-ico">🔍</div>
+    <div><div class="top-t">LlamaIndex RAG 管线可视化</div><div class="top-s">m-indexflow · 交互式教学</div></div>
+  </div>
+  <div class="top-r">
+    <span class="mbadge demo" id="modeBadge">DEMO</span>
+    <div class="stpill" id="stP"><span class="stdot"></span><span id="stT">就绪</span></div>
+    <button class="btn" onclick="resetAll()">重置</button>
+  </div>
+</header>
+<div class="main">
+  <!-- LEFT: PIPELINE -->
+  <div class="pnl">
+    <div class="pnl-h"><div class="pnl-ic ic-p">◈</div><div class="pnl-lb">RAG 管线</div></div>
+    <div class="pnl-b"><div class="pipe-wrap">
+      <svg viewBox="0 0 200 580" id="pipeSvg">
+        <!-- edges -->
+        <path id="pe-1" class="pe" d="M100,48 C100,58 100,64 100,74"/>
+        <path id="pe-2" class="pe" d="M100,112 C100,122 100,128 100,138"/>
+        <path id="pe-3" class="pe" d="M100,176 C100,186 100,192 100,202"/>
+        <path id="pe-4a" class="pe" d="M70,240 C55,258 50,268 50,278"/>
+        <path id="pe-4b" class="pe" d="M130,240 C145,258 150,268 150,278"/>
+        <path id="pe-5a" class="pe" d="M50,320 C50,338 70,348 100,358"/>
+        <path id="pe-5b" class="pe" d="M150,320 C150,338 130,348 100,358"/>
+        <path id="pe-6" class="pe" d="M100,398 C100,408 100,414 100,424"/>
+        <path id="pe-7" class="pe" d="M100,462 C100,472 100,478 100,488"/>
+        <!-- labels on split -->
+        <text class="pe-lb" x="38" y="258">向量</text>
+        <text class="pe-lb" x="154" y="258">关键词</text>
+        <!-- nodes -->
+        <g class="pn pending" id="pn-upload"><rect x="25" y="18" width="150" height="30"/><text class="pn-main" x="100" y="33">📄 文档上传</text><text class="pn-chk" x="170" y="28">✓</text></g>
+        <g class="pn pending" id="pn-split"><rect x="25" y="78" width="150" height="34"/><text class="pn-main" x="100" y="91">SentenceSplitter</text><text class="pn-sub" x="100" y="104">chunk_size=256</text><text class="pn-chk" x="170" y="85">✓</text></g>
+        <g class="pn pending" id="pn-nodes"><rect x="25" y="142" width="150" height="34"/><text class="pn-main" x="100" y="155">TextNode 列表</text><text class="pn-sub" x="100" y="168" id="nodeCount">N 个 Node</text><text class="pn-chk" x="170" y="148">✓</text></g>
+        <g class="pn pending" id="pn-vec"><rect x="5" y="282" width="90" height="38"/><text class="pn-main" x="50" y="296" font-size="11">VectorStore</text><text class="pn-sub" x="50" y="310" id="vecLabel">内存</text><text class="pn-chk" x="88" y="288">✓</text></g>
+        <g class="pn pending" id="pn-es"><rect x="105" y="282" width="90" height="38"/><text class="pn-main" x="150" y="296" font-size="11">BM25 Index</text><text class="pn-sub" x="150" y="310" id="esLabel">内存</text><text class="pn-chk" x="188" y="288">✓</text></g>
+        <g class="pn pending" id="pn-fusion"><rect x="15" y="362" width="170" height="36"/><text class="pn-main" x="100" y="376">QueryFusionRetriever</text><text class="pn-sub" x="100" y="390">RRF 融合排序</text><text class="pn-chk" x="178" y="370">✓</text></g>
+        <g class="pn pending" id="pn-synth"><rect x="25" y="428" width="150" height="34"/><text class="pn-main" x="100" y="441">ResponseSynthesizer</text><text class="pn-sub" x="100" y="454">Refine</text><text class="pn-chk" x="170" y="434">✓</text></g>
+        <g class="pn pending" id="pn-answer"><rect x="40" y="492" width="120" height="30"/><text class="pn-main" x="100" y="507">✨ 回答</text><text class="pn-chk" x="155" y="498">✓</text></g>
+        <!-- index split box -->
+        <rect x="0" y="208" width="200" height="28" rx="6" fill="none" stroke="var(--bdr)" stroke-width="1" stroke-dasharray="4 3"/>
+        <text class="pe-lb" x="100" y="224" text-anchor="middle" font-size="8">双路索引</text>
+      </svg>
+    </div></div>
+  </div>
+  <!-- MIDDLE: CHAT -->
+  <div class="pnl">
+    <div class="pnl-h"><div class="pnl-ic ic-c">◉</div><div class="pnl-lb">对话</div></div>
+    <div class="uarea" id="uArea">
+      <div class="uarea-drop" id="uDrop" style="display:none" onclick="document.getElementById('fInput').click()">
+        <input type="file" id="fInput" accept=".pdf,.md,.txt,.markdown" multiple style="display:none" onchange="handleFiles(this.files)">
+        <div style="font-size:22px;opacity:.25;margin-bottom:6px">📁</div>
+        <div style="font-size:13px;color:var(--td)">点击或拖拽上传 PDF / MD / TXT</div>
+      </div>
+      <div id="fList" class="uarea-flist"></div>
+      <div class="cact">
+        <button class="btn btn-p" id="btnBuild" onclick="buildIndex()" style="font-size:12px;padding:6px 16px">🔨 构建索引</button>
+        <select class="msel" id="modeSel"><option value="router">普通查询 (Router)</option><option value="sub_question">跨文档对比 (SubQuestion)</option></select>
+        <select class="msel" id="synthSel"><option value="compact">Compact (压缩一次调用)</option><option value="refine">Refine (逐个精炼)</option><option value="tree_summarize">TreeSummarize (树形合并)</option></select>
+      </div>
+    </div>
+    <div class="pnl-b cl" id="cList"><div class="ey" id="cEmp"><div class="ey-i">⌘</div><div class="ey-m">先构建索引，再输入问题</div><div class="ey-h">试试 "出差报销标准是多少？"<br>"DataFlow Pro 支持哪些数据库？"<br>"上周会议决定了什么方案？"</div></div></div>
+    <div class="cf"><div class="ci-row">
+      <input class="ci" id="cIn" placeholder="输入问题，按回车查询…" onkeydown="if(event.key==='Enter')sendQuery()" disabled/>
+      <button class="btn btn-p btn-send" id="btnSend" onclick="sendQuery()" disabled><span class="spinner"></span><span class="send-txt">查询</span></button>
+    </div></div>
+  </div>
+  <!-- RIGHT: STEPS -->
+  <div class="pnl">
+    <div class="pnl-h"><div class="pnl-ic ic-s">◆</div><div class="pnl-lb">执行步骤</div></div>
+    <div class="pnl-b" id="sList"><div class="ey"><div class="ey-i">{ }</div><div class="ey-m">构建索引后查看执行流程</div><div class="ey-h">每一步展示代码 · 数据 · 说明</div></div></div>
+    <div class="sctrl">
+      <button class="btn" id="bP" onclick="prevS()" disabled>◀ 上一步</button>
+      <button class="btn" id="bN" onclick="nextS()" disabled>下一步 ▶</button>
+      <button class="btn btn-au" id="bA" onclick="togAuto()" disabled>▶▶ 自动</button>
+    </div>
+  </div>
+</div>
+<div class="tl" id="tl"><div class="tlt" id="tlT"><span style="font-size:11px;color:var(--tm);font-family:var(--fm);opacity:.4">时间线将在运行后显示</span></div></div>
+</div>
+<script>
+let steps=[],curIdx=-1,autoOn=false,autoTmr=null,running=false,indexed=false,querying=false;
+
+// ══ Pipeline node IDs and edge mapping ══
+const PIPE_NODES=['upload','split','nodes','vec','es','fusion','synth','answer'];
+const PHASE_PIPE_MAP={
+  ingest:['upload','split','nodes'],
+  index:['vec','es','fusion','synth'],
+  query:['fusion','synth','answer']
+};
+const EDGE_ORDER=['pe-1','pe-2','pe-3','pe-4a','pe-4b','pe-5a','pe-5b','pe-6','pe-7'];
+
+function setPipeNode(id,st){const e=document.getElementById('pn-'+id);if(e)e.className.baseVal='pn '+(st||'pending');}
+function setPipeEdge(id,st){const e=document.getElementById(id);if(e){e.classList.remove('on','dn');if(st)e.classList.add(st);}}
+function resetPipe(){PIPE_NODES.forEach(n=>setPipeNode(n,'pending'));EDGE_ORDER.forEach(e=>setPipeEdge(e,null));}
+
+function updatePipeFromStep(s){
+  if(s.phase==='ingest'){
+    if(s.component&&s.component.includes('Document')){setPipeNode('upload','running');}
+    if(s.component&&s.component.includes('SimpleDirectoryReader')){setPipeNode('upload','running');setPipeEdge('pe-1','on');}
+    if(s.component&&s.component.includes('SentenceSplitter')){setPipeNode('upload','completed');setPipeNode('split','running');setPipeEdge('pe-1','dn');setPipeEdge('pe-2','on');}
+    if(s.component&&s.component.includes('TextNode')){setPipeNode('split','completed');setPipeNode('nodes','completed');setPipeEdge('pe-2','dn');
+      if(s.output_data&&s.output_data.node_count)document.getElementById('nodeCount').textContent=s.output_data.node_count+' 个 Node';}
+    if(s.component&&s.component.includes('IngestionPipeline')){setPipeNode('nodes','completed');setPipeEdge('pe-3','on');}
+    if(s.component&&s.component.includes('NodeRelationships')){setPipeNode('nodes','completed');}
+    if(s.component&&s.component.includes('HierarchicalNodeParser')){setPipeNode('split','running');}
+  }
+  if(s.phase==='index'){
+    // 索引构建阶段：只高亮 upload→split→nodes→vec/es，不触碰 fusion/synth/answer
+    setPipeNode('upload','completed');setPipeNode('split','completed');setPipeNode('nodes','completed');
+    setPipeEdge('pe-1','dn');setPipeEdge('pe-2','dn');setPipeEdge('pe-3','dn');
+    if(s.component&&(s.component.includes('VectorStore')||s.component.includes('Milvus')||s.component.includes('StorageContext'))){
+      setPipeNode('vec','running');setPipeEdge('pe-4a','on');}
+    if(s.component&&(s.component.includes('ESBm25')||s.component.includes('SummaryIndex'))){
+      setPipeNode('es','running');setPipeEdge('pe-4b','on');}
+    if(s.component&&s.component.includes('Fusion')){
+      setPipeNode('vec','completed');setPipeNode('es','completed');setPipeEdge('pe-4a','dn');setPipeEdge('pe-4b','dn');}
+    // QueryEngine 组装和 Ready 只标记 vec/es 完成，不动 fusion 以下
+    if(s.component&&(s.component.includes('QueryEngine')||s.component.includes('RetrieverQuery')||s.component.includes('as_query_engine'))){
+      setPipeNode('vec','completed');setPipeNode('es','completed');setPipeEdge('pe-4a','dn');setPipeEdge('pe-4b','dn');}
+    if(s.component&&(s.component.includes('Router')||s.component.includes('Ready'))){
+      setPipeNode('vec','completed');setPipeNode('es','completed');setPipeEdge('pe-4a','dn');setPipeEdge('pe-4b','dn');}
+  }
+  if(s.phase==='query'){
+    // 查询阶段：从 fusion 开始往下高亮
+    if(s.component&&(s.component.includes('Fusion')||s.component.includes('Router')||s.component.includes('SubQuestion'))){
+      setPipeNode('fusion','running');setPipeEdge('pe-5a','on');setPipeEdge('pe-5b','on');}
+    if(s.component&&s.component.includes('Retriever')&&s.title.includes('检索完成')){
+      setPipeNode('fusion','completed');setPipeEdge('pe-5a','dn');setPipeEdge('pe-5b','dn');setPipeEdge('pe-6','on');setPipeNode('synth','running');}
+    if(s.component&&s.component.includes('Synthesizer')){
+      setPipeNode('synth','completed');setPipeEdge('pe-6','dn');setPipeEdge('pe-7','dn');setPipeNode('answer','completed');}
+  }
+}
+
+// ══ SSE ══
+async function sseStream(url,opts,onStep,onDone){
+  running=true;
+  try{
+    const r=await fetch(url,opts);const rd=r.body.getReader();const dc=new TextDecoder();let buf='';
+    while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
+      const ls=buf.split('\n');buf=ls.pop();
+      for(const l of ls){if(!l.startsWith('data: '))continue;const j=l.slice(6).trim();if(!j)continue;
+        try{const e=JSON.parse(j);if(e.done){onDone();return;}onStep(e);}catch(_){}}}
+    onDone();
+  }catch(e){setSt('','连接错误');running=false;}
+}
+
+// ══ BUILD ══
+async function buildIndex(){
+  if(running)return;steps=[];curIdx=-1;indexed=false;
+  document.getElementById('sList').innerHTML='';
+  document.getElementById('cIn').disabled=true;document.getElementById('btnSend').disabled=true;document.getElementById('btnBuild').disabled=true;
+  clearChat();addLoading('正在构建索引...');setSt('on','构建中');resetPipe();
+  addStepLoading('正在初始化...');
+  await sseStream('/api/run',{method:'POST'},
+    (e)=>{steps.push(e);curIdx=steps.length-1;addCard(e);
+      const phaseText={ingest:'文档解析中',index:'索引构建中',query:'查询中',error:'出错'}[e.phase]||'处理中';
+      addStepLoading(`第 ${e.step} 步已完成，${phaseText}...`);
+      renderTL();updateBtns();updatePipeFromStep(e);},
+    ()=>{running=false;indexed=true;setSt('ok','索引就绪');removeLoading();removeStepLoading();
+      document.getElementById('cIn').disabled=false;document.getElementById('btnSend').disabled=false;document.getElementById('btnBuild').disabled=false;
+      addMsg('system','✅ 索引构建完成，可以开始查询了');
+      // update pipe labels
+      fetch('/api/mode').then(r=>r.json()).then(d=>{
+        if(d.mode==='production'){document.getElementById('vecLabel').textContent='Milvus';document.getElementById('esLabel').textContent='ES';}
+      });
+    }
+  );
+}
+
+// ══ QUERY ══
+async function sendQuery(){
+  const inp=document.getElementById('cIn'),q=inp.value.trim();
+  if(!q||running||!indexed)return;
+  inp.value='';querying=true;
+  addMsg('user',q);setSt('on','查询中');
+  document.getElementById('btnSend').classList.add('loading');
+  steps=[];curIdx=-1;document.getElementById('sList').innerHTML='';
+  addLoading('正在检索中...');
+  addStepLoading('正在发起查询...');
+  // reset query part of pipe
+  ['fusion','synth','answer'].forEach(n=>setPipeNode(n,'pending'));
+  ['pe-5a','pe-5b','pe-6','pe-7'].forEach(e=>setPipeEdge(e,null));
+  const mode=document.getElementById('modeSel').value;
+  const synthMode=document.getElementById('synthSel').value;
+  await sseStream('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,mode:mode,synth_mode:synthMode})},
+    (e)=>{steps.push(e);curIdx=steps.length-1;addCard(e);
+      addStepLoading(`第 ${e.step} 步已完成，查询中...`);
+      renderTL();updateBtns();updatePipeFromStep(e);
+      if(e.output_data&&e.output_data.answer){removeLoading();addMsg('ai',e.output_data.answer);}},
+    ()=>{running=false;querying=false;setSt('ok','查询完成');removeLoading();removeStepLoading();document.getElementById('btnSend').classList.remove('loading');}
+  );
+}
+
+// ══ RESET ══
+async function resetAll(){
+  await fetch('/api/reset',{method:'POST'});
+  steps=[];curIdx=-1;running=false;indexed=false;querying=false;stopAuto();resetPipe();renderTL();
+  document.getElementById('cIn').disabled=true;document.getElementById('btnSend').disabled=true;document.getElementById('btnBuild').disabled=false;
+  document.getElementById('btnSend').classList.remove('loading');
+  setSt('','就绪');
+  document.getElementById('cList').innerHTML='<div class="ey" id="cEmp"><div class="ey-i">⌘</div><div class="ey-m">先构建索引，再输入问题</div><div class="ey-h">试试 "出差报销标准是多少？"<br>"DataFlow Pro 支持哪些数据库？"</div></div>';
+  document.getElementById('sList').innerHTML='<div class="ey"><div class="ey-i">{ }</div><div class="ey-m">构建索引后查看执行流程</div></div>';
+  document.getElementById('fList').innerHTML='';
+  document.getElementById('nodeCount').textContent='N 个 Node';
+  document.getElementById('vecLabel').textContent='内存';document.getElementById('esLabel').textContent='内存';
+}
+
+// ══ STATUS ══
+function setSt(cls,txt){document.getElementById('stP').className='stpill'+(cls?' '+cls:'');document.getElementById('stT').textContent=txt;}
+
+// ══ STEP CARDS ══
+function addStepLoading(text){
+  const el=document.getElementById('stepLoading');
+  if(el){
+    // 已存在则更新文字
+    const t=el.querySelector('.sc-loading-txt');if(t)t.textContent=text;
+    return;
+  }
+  const sl=document.getElementById('sList');sl.querySelector('.ey')?.remove();
+  const d=document.createElement('div');d.className='sc-loading';d.id='stepLoading';
+  d.innerHTML=`<div class="spinner"></div><span class="sc-loading-txt">${esc(text)}</span>`;
+  sl.insertBefore(d,sl.firstChild);
+}
+function removeStepLoading(){const el=document.getElementById('stepLoading');if(el)el.remove();}
+
+function addCard(s){
+  removeStepLoading();
+  const sl=document.getElementById('sList');sl.querySelector('.ey')?.remove();
+  sl.querySelector('.sc.active')?.classList.remove('active');
+  const tagTxt=s.component||s.phase.toUpperCase();
+  const tagCls=s.phase==='error'?'tag-err':s.component?'tag-li':'tag-ph';
+  let dt='';
+  if(s.code)dt+=`<div class="sc-code"><div class="sc-code-hd"><div class="sc-dots"><span></span><span></span><span></span></div><div class="sc-code-lb">SOURCE</div></div><pre>${hlCode(s.code)}</pre></div>`;
+  if(s.input_data){
+    const id=s.input_data;
+    if(id.llm_request){
+      // LLM Request 美化展示
+      const lr=id.llm_request;
+      let rh='<div class="sc-data"><div class="sc-dlb dl-i"><span class="bar"></span>LLM 实际请求</div>';
+      rh+=`<div class="sc-llm-req">`;
+      rh+=`<div class="sc-llm-section"><div class="sc-llm-label">📋 基本信息</div><div class="sc-llm-val">查询: ${esc(id.query||'')}\n模式: ${esc(id.synth_mode||'')}\nNode 数量: ${id.node_count||0}\nContext 总字数: ${id.context_total_chars||0}</div></div>`;
+      rh+=`<div class="sc-llm-section"><div class="sc-llm-label">🤖 System Prompt</div><div class="sc-llm-val">${esc(lr.system||'')}</div></div>`;
+      rh+=`<div class="sc-llm-section"><div class="sc-llm-label">📄 Context（检索结果拼接）</div><div class="sc-llm-ctx">${esc(lr.context||'')}</div></div>`;
+      rh+=`<div class="sc-llm-section"><div class="sc-llm-label">❓ Question</div><div class="sc-llm-val sc-llm-q">${esc(lr.question||'')}</div></div>`;
+      rh+=`</div></div>`;
+      dt+=rh;
+    } else {
+      dt+=`<div class="sc-data"><div class="sc-dlb dl-i"><span class="bar"></span>输入数据</div><div class="sc-dv">${esc(JSON.stringify(id,null,2))}</div></div>`;
+    }
+  }
+  if(s.output_data){
+    const od=s.output_data;
+    // 如果有 nodes 数组，用美化的 Node 卡片展示
+    if(od.nodes&&Array.isArray(od.nodes)&&od.nodes.length>0){
+      let nh='<div class="sc-data"><div class="sc-dlb dl-o"><span class="bar"></span>检索结果 ('+od.nodes.length+' 个 Node)</div><div class="sc-nodes">';
+      od.nodes.forEach(n=>{
+        const mergedTag=n.is_merged?'<span style="background:var(--emd);color:var(--em);font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px;font-family:var(--fm)">已合并 ↑</span>':'';
+        const lenTag=n.text_length?`<span style="color:var(--td);font-size:10px;margin-left:6px">${n.text_length}字</span>`:'';
+        nh+=`<div class="sc-node-card${n.is_merged?' sc-node-merged':''}"><div class="sc-node-hd"><span class="sc-node-rank">#${n.rank||''}</span><span class="sc-node-id">${esc(n.node_id||'')}</span>${lenTag}${mergedTag}<span class="sc-node-score">score: ${n.score??'N/A'}</span></div><div class="sc-node-txt">${esc(n.text||'')}</div>`;
+        if(n.metadata&&Object.keys(n.metadata).length>0) nh+=`<div class="sc-node-meta">${esc(JSON.stringify(n.metadata))}</div>`;
+        nh+='</div>';
+      });
+      nh+='</div></div>';
+      dt+=nh;
+      // 其他字段（去掉 nodes）单独展示
+      const rest={...od};delete rest.nodes;
+      if(Object.keys(rest).length>0) dt+=`<div class="sc-data"><div class="sc-dlb dl-o"><span class="bar"></span>其他数据</div><div class="sc-dv">${esc(JSON.stringify(rest,null,2))}</div></div>`;
+    } else {
+      dt+=`<div class="sc-data"><div class="sc-dlb dl-o"><span class="bar"></span>输出数据</div><div class="sc-dv">${esc(JSON.stringify(od,null,2))}</div></div>`;
+    }
+  }
+  if(s.explanation)dt+=`<div class="sc-exp">${esc(s.explanation)}</div>`;
+  if(s.elapsed_ms>0)dt+=`<div class="sc-ela">⏱ ${s.elapsed_ms}ms</div>`;
+  const d=document.createElement('div');d.className='sc active done';d.dataset.idx=steps.length-1;
+  const elStr=s.elapsed_ms>0?`<span class="sc-time">⏱${s.elapsed_ms}ms</span>`:'';
+  d.innerHTML=`<div class="sc-hd" onclick="togCard(this)"><span class="sc-num">${s.step}</span><span class="sc-dot"></span><span class="sc-tl">${esc(s.title)}</span>${elStr}<span class="sc-tag ${tagCls}">${esc(tagTxt)}</span></div><div class="sc-dt">${dt}</div>`;
+  sl.insertBefore(d,sl.firstChild);sl.scrollTop=0;
+}
+function togCard(h){const c=h.parentElement,w=c.classList.contains('active');document.querySelectorAll('.sc.active').forEach(x=>x.classList.remove('active'));if(!w){c.classList.add('active');curIdx=+c.dataset.idx;renderTL();updateBtns();}}
+
+// ══ NAV ══
+function goTo(i){if(i<0||i>=steps.length)return;curIdx=i;document.querySelectorAll('.sc.active').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.sc').forEach(c=>{if(+c.dataset.idx===i)c.classList.add('active');});renderTL();updateBtns();const card=document.querySelector(`.sc[data-idx="${i}"]`);card?.scrollIntoView({behavior:'smooth',block:'nearest'});}
+function prevS(){goTo(curIdx-1);}function nextS(){goTo(curIdx+1);}
+function togAuto(){if(autoOn){stopAuto();return;}autoOn=true;const b=document.getElementById('bA');b.classList.add('pl');b.textContent='⏸ 暂停';autoTmr=setInterval(()=>{if(curIdx<steps.length-1)nextS();else stopAuto();},1500);}
+function stopAuto(){autoOn=false;clearInterval(autoTmr);const b=document.getElementById('bA');b.classList.remove('pl');b.textContent='▶▶ 自动';}
+function updateBtns(){document.getElementById('bP').disabled=curIdx<=0;document.getElementById('bN').disabled=curIdx>=steps.length-1;document.getElementById('bA').disabled=!steps.length;}
+function hlCode(c){return c.split('\n').map(ln=>{const act=ln.trimStart().startsWith('▶');let t=esc(ln.replace(/^(\s*)▶\s?/,'$1'));t=t.replace(/\b(from|import|class|def|return|for|in|if|else|elif|try|except|pass|None|True|False|async|await)\b/g,'<span class="ck">$1</span>');t=t.replace(/(#[^\n]*)/g,'<span class="cc">$1</span>');t=t.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,'<span class="cs">$1</span>');t=t.replace(/\b(\w+)\s*\(/g,'<span class="cf2">$1</span>(');t=t.replace(/(→|▶|►)/g,'<span class="cv">$1</span>');return `<span class="cln${act?' cla':''}">${t}</span>`;}).join('\n');}
+
+// ══ TIMELINE ══
+function renderTL(){const tr=document.getElementById('tlT');if(!steps.length){tr.innerHTML='<span style="font-size:11px;color:var(--tm);font-family:var(--fm);opacity:.4">时间线将在运行后显示</span>';return;}
+  const pm={ingest:'INGEST',index:'INDEX',query:'QUERY',error:'ERROR'};let h='',lp='';
+  steps.forEach((s,i)=>{if(s.phase!==lp){if(lp)h+='<div class="tlsp">│</div>';h+=`<div class="tlsp">${pm[s.phase]||s.phase.toUpperCase()}</div>`;lp=s.phase;}
+    const iC=i===curIdx,iD=i<curIdx;let cls='tln';if(iC)cls+=' cu';else if(iD)cls+=' dn';
+    h+=`<div class="${cls}" onclick="goTo(${i})"><div class="tld"></div><div class="tltp">${s.step}. ${esc(s.title.substring(0,26))}</div></div>`;
+    if(i<steps.length-1)h+=`<div class="tlw${iD?' dn':''}"></div>`;});
+  tr.innerHTML=h;tr.querySelector('.cu')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}
+
+// ══ CHAT ══
+function clearChat(){document.getElementById('cList').innerHTML='';}
+function addMsg(type,text){const c=document.getElementById('cList');document.getElementById('cEmp')?.remove();document.querySelector('.msg-loading')?.remove();const d=document.createElement('div');d.className='msg msg-'+type;d.textContent=text;c.appendChild(d);c.scrollTop=c.scrollHeight;}
+function addLoading(text){const c=document.getElementById('cList');document.getElementById('cEmp')?.remove();const d=document.createElement('div');d.className='msg-loading';d.innerHTML=`<div class="spinner"></div><span>${esc(text)}</span>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
+function removeLoading(){document.querySelector('.msg-loading')?.remove();}
+
+// ══ MODE + UPLOAD ══
+let curMode='demo';
+async function detectMode(){
+  try{const r=await fetch('/api/mode');const d=await r.json();curMode=d.mode;
+    const b=document.getElementById('modeBadge');b.textContent=curMode==='production'?'PRODUCTION':'DEMO';b.className='mbadge '+(curMode==='production'?'prod':'demo');
+    document.getElementById('uDrop').style.display=curMode==='production'?'block':'none';
+    if(curMode==='production'){document.getElementById('vecLabel').textContent='Milvus';document.getElementById('esLabel').textContent='ES';}
+  }catch(e){}}
+detectMode();
+async function handleFiles(files){
+  document.getElementById('fList').innerHTML='';
+  const f=files[0];if(!f)return;
+  try{
+    const fd=new FormData();fd.append('file',f);
+    const r=await fetch('/api/upload',{method:'POST',body:fd});
+    if(!r.ok){addMsg('system','❌ '+f.name+': 上传失败');return;}
+    const d=await r.json();
+    document.getElementById('fList').innerHTML=`<div class="uarea-fi"><span class="fn">📄 ${esc(d.filename)}</span><span class="fc">${d.doc_count} docs</span></div>`;
+    addMsg('system','✅ '+d.filename+' 上传成功');
+  }catch(e){addMsg('system','❌ '+f.name+': 异常');}
+}
+const drop=document.getElementById('uDrop');
+if(drop){drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('dragover');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragover'));drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragover');handleFiles(e.dataTransfer.files);});}
+
+function esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+# LlamaIndex 核心
+llama-index-core
+llama-index-llms-openai-like
+llama-index-embeddings-openai
+llama-index-question-gen-openai
+# Production 模式：存储 + 检索
+llama-index-vector-stores-milvus
+llama-index-readers-file
+elasticsearch>=7,<8
+pypdf
+jieba
